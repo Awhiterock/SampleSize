@@ -1,0 +1,215 @@
+import numpy as np
+import pandas as pd
+from math import log, exp
+from scipy.stats import norm
+import matplotlib.pyplot as plt
+
+class Main():
+    def __init__(self):
+        #self.menu()
+        self.state = None
+        self.version = 0.1
+        self.math = None
+    def simple_result_output(self, E, sample_size, toggle):
+        if toggle == 3:
+            print(f'''Вычисление произведено по методам Schoenfield и Fridman.
+            Необходимое число исходов по методу Schoenfield: {E[0]}. Общий размер выборки: {sample_size[0]}.
+            Необходимое число исходов по методу Fridman: {E[1]}. Общий размер выборки: {sample_size[1]}.
+            ''')
+        if toggle == 1:
+            print(f'''Вычисление произведено по методам Schoenfield.
+            Необходимое число исходов по методу Schoenfield: {E[0]}. Общий размер выборки: {sample_size[0]}''')
+        elif toggle == 2:
+            print(f'''Вычисление произведено по методам Fridman.
+            Необходимое число исходов по методу Fridman: {E[1]}. Общий размер выборки: {sample_size[1]}.
+            ''')
+    def single_estimation(self, alpha, beta, b_part, HRplan, fau, toggle):
+        Estimation = Math()
+        z_alpha = Math.get_z_alpha_2sided(alpha)
+        z_beta = Math.get_z_beta(beta)
+        attributes = {'Base part' : b_part,
+                      'HRplan' : HRplan,
+                      'Z_alpha' : z_alpha,
+                      'Z_beta' : z_beta,
+                      'Fau' : fau}
+        Estimation.attributes_set(attributes)
+        E, sample_size = Estimation.sample_size_estimation(toggle)
+        self.simple_result_output(E, sample_size, toggle)
+    def HR_diap_estimation(self, alpha, beta, b_part, HRdiap, fau, toggle):
+        Estimation = Math()
+        z_alpha = Math.get_z_alpha_2sided(alpha)
+        z_beta = Math.get_z_beta(beta)
+        attributes = {'Base part' : b_part,
+                      'HRplan' : None,
+                      'Z_alpha' : z_alpha,
+                      'Z_beta' : z_beta,
+                      'Fau' : fau}
+        Estimation.attributes_set(attributes)
+        HRs, Es, sample_sizes = [], [], []
+        for HRplan in np.arange(HRdiap[0], (HRdiap[1]+HRdiap[2]), HRdiap[2]):
+            HRs.append(HRplan)
+            Estimation.HRplan = HRplan
+            E, sample_size = Estimation.sample_size_estimation(toggle)
+            Es.append(E)
+            sample_sizes.append(sample_size)
+        self.HR_diap_result_output(HRs, Es, sample_sizes)
+    def HR_diap_result_output(HRs, Es, sample_sizes):     
+        result_df = pd.DataFrame(columns = ['HR', 'E', 'N'])
+        result_df['HR'] = HRs
+        result_df['E'] = Es
+        result_df['N'] = sample_sizes
+        result_df.to_excel('sample_by_HR_output.xlsx')
+        plt.plot(result_df['HR'], result_df['N'], marker='o', linestyle='-', color='b')
+        plt.plot(result_df['HR'], result_df['E'], marker='s', linestyle='-', color='o')
+        plt.xlabel('Размер эффекта (HR)')
+        plt.ylabel('Необходимое число исходов (E) и размер выборки (N)')
+        plt.grid(True)
+        plt.show()
+    def fau_diap_estimation(self, alpha, beta, b_part, HRplan, fau_diap, toggle):
+        Estimation = Math()
+        z_alpha = Math.get_z_alpha_2sided(alpha)
+        z_beta = Math.get_z_beta(beta)
+        attributes = {'Base part' : b_part,
+                      'HRplan' : HRplan,
+                      'Z_alpha' : z_alpha,
+                      'Z_beta' : z_beta,
+                      'Fau' : None}
+        Estimation.attributes_set(attributes)
+        Faus, Es, sample_sizes = [], [], []
+        for fau in np.arange(fau_diap[0], (fau_diap[1]+fau_diap[2]), fau_diap[2]):
+            Faus.append(fau)
+            Estimation.fau = fau
+            E, sample_size = Estimation.sample_size_estimation(toggle)
+            Es.append(E)
+            sample_sizes.append(sample_size)
+    def fau_diap_result_output(Faus, Es, sample_sizes):
+        result_df = pd.DataFrame(columns = ['Fau', 'E', 'N'])
+        result_df['Fau'] = Faus
+        result_df['E'] = Es
+        result_df['N'] = sample_sizes
+        result_df.to_excel('sample_by_fau_output.xlsx')
+        plt.plot(result_df['Fau'], result_df['N'], marker='o', linestyle='-', color='b')
+        plt.plot(result_df['Fau'], result_df['E'], marker='s', linestyle='-', color='o')
+        plt.xlabel('Отношение групп (fau)')
+        plt.ylabel('Необходимое число исходов (E) и размер выборки (N)')
+        plt.grid(True)
+        plt.show()
+    def HR_fau_estimation(self, alpha, beta, b_part, HRdiap, fau_diap, toggle):
+        Estimation = Math()
+        z_alpha = Math.get_z_alpha_2sided(alpha)
+        z_beta = Math.get_z_beta(beta)
+        attributes = {'Base part' : b_part,
+                      'HRplan' : None,
+                      'Z_alpha' : z_alpha,
+                      'Z_beta' : z_beta,
+                      'Fau' : None}
+        Estimation.attributes_set(attributes)
+        Faus, HRs, Es, sample_sizes = [], [], [], []
+        Faus = np.arange(fau_diap[0], (fau_diap[1]+fau_diap[2]), fau_diap[2])
+        HRs = np.arange(HRdiap[0], (HRdiap[1]+HRdiap[2]), HRdiap[2])
+        Faus_grid, HRs_grid = np.meshgrid(Faus, HRs)
+        E_values, sample_size_values = np.vectorize(Estimation.sample_size_estimation)(toggle, Faus_grid, HRs_grid)
+        result_df = pd.DataFrame({
+            'Fau': Faus_grid.flatten(),
+            'HR': HRs_grid.flatten(),
+            'E': E_values.flatten(),
+            'N': sample_size_values.flatten()
+            })
+        result_df.to_excel('sample_by_HR_fau_output.xlsx')
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+        surface = ax.plot_surface(HRs_grid, Faus_grid, sample_size_values, cmap='viridis')
+        plt.title('Необходимый размер выборки (N) в зависимости от размера эффекта и отношения групп (fau)')
+        ax.set_xlabel('Размер эффекта (HR)')
+        ax.set_ylabel('Отношение групп (fau)')
+        ax.set_zlabel('Размер выборки (N)')
+        plt.show()
+
+class Math():
+    def __init__(self):
+        self.b_part = None
+        self.time = None
+        self.HRplan = None
+        self.fau = None
+        self.z_alpha = None
+        self.z_beta = None
+    def hazard_rate_by_part(b_part, time):
+        try:
+            hazard_rate = (-log(b_part))/time
+        except Exception as e:
+            print(f'Ошибка при подсчёте функции риска (hazard rate).\nПроверьте, что введённые данные удовлетворяют условиям.\nВывод ошибки: {e}')
+        return hazard_rate    
+    def NOE_Schoenfield(self, fau, z_alpha, z_beta, HRplan):
+        try:
+            pt_a = ((1 + fau)**2) / fau
+            pt_b = ((z_alpha+z_beta)**2) / (log(HRplan)**2)
+            E_sch = pt_a * pt_b
+        except Exception as e:
+            print(f'Ошибка при подсчёте необходимого числа исходов (number of events).\nПроверьте, что введённые данные удовлетворяют условиям.\nВывод ошибки: {e}')
+        return E_sch
+    def NOE_Fridman(self, fau, z_alpha, z_beta, HRplan):
+        try:
+            pt_a = 1 / fau
+            pt_b = ((1 + fau * HRplan) / (1 - HRplan))**2
+            pt_c = (z_alpha+z_beta)**2
+            E_Fri = pt_a * pt_b * pt_c
+        except Exception as e:
+            print(f'Ошибка при подсчёте необходимого числа исходов (number of events).\nПроверьте, что введённые данные удовлетворяют условиям.\nВывод ошибки: {e}')
+    def total_NOS(self, E, b_part, a_part, fau):
+        try:
+            pt_a = 1 - b_part
+            pt_b = fau * (1 - a_part)
+            pt_c = 1 + fau
+            psy = (pt_a + pt_b)  / pt_c
+            total_nos = E / psy
+        except Exception as e:
+            print(f'Ошибка при подсчёте необходимого числа исходов (number of events).\nПроверьте, что введённые данные удовлетворяют условиям.\nВывод ошибки: {e}')
+        return total_nos
+    def a_part_estimation(self, HRplan, b_part):
+        a_part = exp(HRplan * log(b_part))
+        return a_part
+    def attributes_set(self, attributes):
+        b_part = attributes['Base part']
+        HRplan = attributes['HRplan']
+        z_alpha = attributes['Z_alpha']
+        z_beta = attributes['Z_beta']
+        fau = attributes['Fau']
+        self.b_part = b_part
+        self.z_alpha = z_alpha
+        self.z_beta = z_beta
+        return b_part, HRplan, z_alpha, z_beta, fau
+    def get_z_alpha_2sided(alpha):
+        z_alpha = norm.ppf(1 - alpha / 2)
+        return z_alpha
+    def get_z_beta(beta):
+        z_beta = norm.ppf(1 - beta)
+        return z_beta
+    def sample_size_estimation(self, toggle, fau = None, HRplan = None):
+        if fau == None:
+            fau = self.fau
+        if HRplan == None:
+            HRplan = self.HRplan
+        b_part = self.b_part
+        z_alpha = self.z_alpha
+        z_beta = self.z_beta
+        a_part = self.a_part_estimation(HRplan, b_part)
+        if toggle == 1 or toggle == 2:
+            if toggle == 1:
+                E = self.NOE_Schoenfield(fau, z_alpha, z_beta, HRplan)
+            elif toggle == 2:
+                E = self.NOE_Fridman(fau, z_alpha, z_beta, HRplan)
+            sample_size = self.total_NOS(E, b_part, a_part, fau)
+            return E, sample_size
+        elif toggle == 3:
+            E_sch = self.NOE_Schoenfield(fau, z_alpha, z_beta, HRplan)
+            E_fri = self.NOE_Fridman(fau, z_alpha, z_beta, HRplan)
+            sample_size_sch = self.total_NOS(E_sch, b_part, a_part, fau)
+            sample_size_fri = self.total_NOS(E_fri, b_part, a_part, fau)
+            E = [E_sch, E_fri]
+            sample_size = [sample_size_sch, sample_size_fri]
+            return E, sample_size
+    def Bonferroni(alpha, comparisons_n):
+        return (alpha / comparisons_n)
+    
+Main_o = Main()
+Main_o.HR_fau_estimation(alpha = 0.05, beta = 0.8, b_part = 0.9, HRdiap = [1.5, 3, 0.1], fau_diap = [1, 5, 1], toggle = 1)
